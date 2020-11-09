@@ -20,7 +20,7 @@
 #   -ip        - Use Instance Principals for Authentication
 #   -dt        - Use Instance Principals with delegation token for cloud shell
 #   -sb source_bucket
-#   -sp source_prefix_include
+#   -sp source_prefix
 #   -sr source_region
 ##########################################################################
 
@@ -46,7 +46,7 @@ parser.add_argument('-ip', action='store_true', default=False, dest='is_instance
 parser.add_argument('-dt', action='store_true', default=False, dest='is_delegation_token', help='Use Delegation Token for Authentication')
 parser.add_argument('-c', type=argparse.FileType('r'), dest='config_file', help="Config File (default=~/.oci/config)")
 parser.add_argument('-sb', default="", dest='source_bucket', help='Source Bucket Name')
-parser.add_argument('-sp', default="", dest='source_prefix_include', help='Source Prefix Include')
+parser.add_argument('-sp', default="", dest='source_prefix', help='Source Prefix Include')
 parser.add_argument('-sr', default="", dest='source_region', help='Source Region')
 cmd = parser.parse_args()
 
@@ -61,7 +61,7 @@ if not cmd.source_bucket:
 
 
 source_bucket = cmd.source_bucket
-source_prefix = cmd.source_prefix_include
+source_prefix = cmd.source_prefix
 
 # Parameters
 worker_count = 40
@@ -77,7 +77,7 @@ q = queue.Queue()
 object_storage_client = None
 source_namespace = ""
 source_bucket = cmd.source_bucket
-source_prefix = cmd.source_prefix_include
+source_prefix = cmd.source_prefix
 source_region = cmd.source_region
 
 # Update Variables based on the parameters
@@ -255,6 +255,7 @@ def add_objects_to_queue(ns, source_bucket):
 def connect_to_object_storage():
     global source_namespace
     global object_storage_client
+    global source_region
 
     # get signer
     config, signer = create_signer(cmd.config_file, cmd.config_profile, cmd.is_instance_principals, cmd.is_delegation_token)
@@ -262,6 +263,8 @@ def connect_to_object_storage():
     # if region is specified
     if source_region:
         config['region'] = source_region
+    else:
+        source_region = config['region']
 
     try:
         # connect and fetch namespace
