@@ -3,14 +3,14 @@
 # This software is dual-licensed to you under the Universal Permissive License (UPL) 1.0 as shown at https://oss.oracle.com/licenses/upl or Apache License 2.0 as shown at http://www.apache.org/licenses/LICENSE-2.0. You may choose either license.
 
 ##########################################################################
-# object_storage_bulk_delete.py
+# object_storage_bulk_rename.py
 #
-# @author: Adi Zohar
+# @author: Adi Z
 #
 # Supports Python 3
 ##########################################################################
 # Info:
-#    Bulk delete with parallel threads
+#    Bulk rename with parallel threads
 #
 ##########################################################################
 # Application Command line parameters
@@ -21,8 +21,10 @@
 #   -ip        - Use Instance Principals for Authentication
 #   -dt        - Use Instance Principals with delegation token for cloud shell
 #   -sb source_bucket
-#   -sp source_prefix
+#   -sp source_prefix_include
 #   -sr source_region
+#   -textremove - text remove prefix (can be used to remove folder)
+#   -textappend - text append prefix (can be used to add folder)
 ##########################################################################
 
 import threading
@@ -32,7 +34,6 @@ import oci
 import argparse
 import datetime
 import sys
-import click
 import os
 
 ##########################################################################
@@ -47,10 +48,10 @@ parser.add_argument('-ip', action='store_true', default=False, dest='is_instance
 parser.add_argument('-dt', action='store_true', default=False, dest='is_delegation_token', help='Use Delegation Token for Authentication')
 parser.add_argument('-c', type=argparse.FileType('r'), dest='config_file', help="Config File (default=~/.oci/config)")
 parser.add_argument('-sb', default="", dest='source_bucket', help='Source Bucket Name')
-parser.add_argument('-sp', default="", dest='source_prefix', help='Source Prefix Include')
-parser.add_argument('-se', default="", dest='source_prefix_exclude', help='Source Prefix Exclude')
-parser.add_argument('-exclude_dirs', action='store_true', default=False, dest='source_exclude_dirs', help='Exclude Directories')
+parser.add_argument('-sp', default="", dest='source_prefix_include', help='Source Prefix Include')
 parser.add_argument('-sr', default="", dest='source_region', help='Source Region')
+parser.add_argument('-textrem', default="", dest='text_remove', help='text remove prefix (can be used to remove folder)')
+parser.add_argument('-textadd', default="", dest='text_append', help='text append prefix (can be used to add folder)')
 cmd = parser.parse_args()
 
 if len(sys.argv) < 1:
@@ -62,9 +63,10 @@ if not cmd.source_bucket:
     parser.print_help()
     raise SystemExit
 
-
-source_bucket = cmd.source_bucket
-source_prefix = cmd.source_prefix
+if not cmd.text_remove and not cmd.text_append:
+    print("Text Remove Prefix or Text Append Prefix required !!!\n")
+    parser.print_help()
+    raise SystemExit
 
 # Parameters
 worker_count = 40
@@ -76,18 +78,22 @@ max_retry_timeout = 16**2
 # global queue
 q = queue.Queue()
 
+# Update Variables based on the parameters
+config_file = (cmd.config_file if cmd.config_file else oci.config.DEFAULT_LOCATION)
+config_profile = (cmd.config_profile if cmd.config_profile else oci.config.DEFAULT_PROFILE)
+
 # Global Variables
 object_storage_client = None
 source_namespace = ""
 source_bucket = cmd.source_bucket
-source_prefix = cmd.source_prefix
-source_prefix_exclude = cmd.source_prefix_exclude
+source_prefix = cmd.source_prefix_include
 source_region = cmd.source_region
-source_exclude_dirs = cmd.source_exclude_dirs
 
-# Update Variables based on the parameters
-config_file = (cmd.config_file if cmd.config_file else oci.config.DEFAULT_LOCATION)
-config_profile = (cmd.config_profile if cmd.config_profile else oci.config.DEFAULT_PROFILE)
+source_text_remove = cmd.text_remove
+source_text_append = cmd.text_append
+
+if source_text_remove:
+    source_prefix = source_text_remove
 
 
 ##########################################################################
@@ -185,17 +191,15 @@ def print_header(name):
 # Print Info
 ##########################################################################
 def print_command_info():
-    print_header("Running Object Storage Bulk Delete")
-    print("Written by Adi Zohar, July 2020")
+    print_header("Running Object Storage Bulk Rename")
+    print("Written by Adi Z, March 2021")
     print("Starts at             : " + get_time(full=True))
     print("Command Line          : " + ' '.join(x for x in sys.argv[1:]))
     print("Source Namespace      : " + source_namespace)
     print("Source Bucket         : " + source_bucket)
     print("Source Prefix Include : " + source_prefix)
-    print("Source Prefix Exclude : " + source_prefix_exclude)
-    print("Source Region         : " + source_region)
-    if source_exclude_dirs:
-        print("Source Exclude Dirs   : True")
+    print("Text Remove Prefix    : " + source_text_remove)
+    print("Text Append Prefix    : " + source_text_append)
 
 
 ##############################################################################
@@ -209,7 +213,7 @@ def worker():
         while True:
             response = None
             try:
-                response = object_storage_client.delete_object(source_namespace, source_bucket, object_)
+                response = rename_object(source_namespace, source_bucket, object_)
                 break
 
             except Exception as e:
@@ -217,7 +221,7 @@ def worker():
                     break
 
                 if interval_exp > max_retry_timeout:
-                    print("  ERROR: Failed to request delete of %s" % (object_))
+                    print("  ERROR: Failed to request rename of %s" % (object_))
                     raise
 
                 if response:
@@ -245,11 +249,6 @@ def add_objects_to_queue(ns, source_bucket):
         next_starts_with = response.data.next_start_with
 
         for object_ in response.data.objects:
-            if source_prefix_exclude and object_.name.startswith(source_prefix_exclude):
-                continue
-            if source_exclude_dirs and "/" in object_.name:
-                continue
-
             q.put(object_.name)
             count += 1
 
@@ -263,12 +262,33 @@ def add_objects_to_queue(ns, source_bucket):
 
 
 ##############################################################################
+# rename object function
+##############################################################################
+def rename_object(ns, bucket, object_name):
+    new_name = object_name
+
+    # if remove prefix name
+    if source_text_remove:
+        if object_name.startswith(source_text_remove):
+            new_name = object_name[len(source_text_remove):]
+
+    # if append prefix name
+    if source_text_append:
+        new_name = source_text_append + new_name
+
+    rename_request = oci.object_storage.models.RenameObjectDetails()
+    rename_request.source_name = object_name
+    rename_request.new_name = new_name
+
+    return object_storage_client.rename_object(ns, bucket, rename_request)
+
+
+##############################################################################
 # connect to object storage
 ##############################################################################
 def connect_to_object_storage():
     global source_namespace
     global object_storage_client
-    global source_region
 
     # get signer
     config, signer = create_signer(cmd.config_file, cmd.config_profile, cmd.is_instance_principals, cmd.is_delegation_token)
@@ -276,8 +296,6 @@ def connect_to_object_storage():
     # if region is specified
     if source_region:
         config['region'] = source_region
-    else:
-        source_region = config['region']
 
     try:
         # connect and fetch namespace
@@ -303,11 +321,29 @@ def main():
     # connect to object storage
     connect_to_object_storage()
 
+    # global parameters
+    global source_namespace
+    global object_storage_client
+
+    # get signer
+    config, signer = create_signer(cmd.config_file, cmd.config_profile, cmd.is_instance_principals, cmd.is_delegation_token)
+
+    try:
+        # connect and fetch namespace
+        print("\nConnecting to Object Storage Service...")
+        object_storage_client = oci.object_storage.ObjectStorageClient(config, signer=signer)
+        if cmd.proxy:
+            object_storage_client.base_client.session.proxies = {'https': cmd.proxy}
+
+        # retrieve namespace from object storage
+        source_namespace = object_storage_client.get_namespace().data
+        print("Succeed.")
+
+    except Exception as e:
+        raise RuntimeError("\nError extracting namespace - " + str(e))
+
     # command info
     print_command_info()
-
-    if not click.confirm('\nAre you sure you want to continue deleting ?'):
-        raise SystemExit
 
     print_header("Start Processing")
     print(get_time() + " - Creating %s workers." % (worker_count))
@@ -316,19 +352,19 @@ def main():
         w.daemon = True
         w.start()
 
-    print(get_time() + " - Getting list of objects from source source_bucket (%s). delete will start immediately." % (source_bucket))
+    print(get_time() + " - Getting list of objects from source source_bucket (%s). Rename will start immediately." % (source_bucket))
     count = add_objects_to_queue(source_namespace, source_bucket)
-    print(get_time() + " - Enqueued %s objects to be deleted" % (count))
+    print(get_time() + " - Enqueued %s objects to be Renamed" % (count))
 
     while count > 0:
         print(get_time() + " - Waiting %s seconds before checking status." % (status_interval))
         time.sleep(status_interval)
 
         if q.qsize() == 0:
-            print(get_time() + " - deletion of all objects has been requested.")
+            print(get_time() + " - Rename of all objects has been requested.")
             break
         else:
-            print(get_time() + " - %s object deletes remaining to requested." % (q.qsize()))
+            print(get_time() + " - %s object renames remaining to requested." % (q.qsize()))
 
     q.join()
 

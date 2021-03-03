@@ -1,6 +1,7 @@
 # coding: utf-8
 # Copyright (c) 2016, 2020, Oracle and/or its affiliates.  All rights reserved.
 # This software is dual-licensed to you under the Universal Permissive License (UPL) 1.0 as shown at https://oss.oracle.com/licenses/upl or Apache License 2.0 as shown at http://www.apache.org/licenses/LICENSE-2.0. You may choose either license.
+
 ##########################################################################
 # object_storage_bulk_copy.py
 #
@@ -21,6 +22,7 @@
 #   -dt        - Use Instance Principals with delegation token for cloud shell
 #   -sb source_bucket
 #   -sr source_region
+#   -sn source_namespace
 #   -sp source_prefix_include
 #   -se source_prefix_exclude
 #   -db destination_bucket
@@ -52,10 +54,12 @@ parser.add_argument('-dt', action='store_true', default=False, dest='is_delegati
 parser.add_argument('-c', type=argparse.FileType('r'), dest='config_file', help="Config File (default=~/.oci/config)")
 parser.add_argument('-sb', default="", dest='source_bucket', help='Source Bucket Name')
 parser.add_argument('-sr', default="", dest='source_region', help='Source Region (Default current connection)')
+parser.add_argument('-sn', default="", dest='source_namespace', help='Source Namespace (Default current connection)')
 parser.add_argument('-sp', default="", dest='source_prefix_include', help='Source Prefix Include')
 parser.add_argument('-se', default="", dest='source_prefix_exclude', help='Source Prefix Exclude')
 parser.add_argument('-db', default="", dest='destination_bucket', help='Destination Bucket Name')
 parser.add_argument('-dr', default="", dest='destination_region', help='Destination Region')
+parser.add_argument('-dn', default="", dest='destination_namespace', help='Destination Namespace (Default current connection)')
 parser.add_argument('-ig', action='store_true', default=False, dest='ignore_exist', help='Ignore Check if files exist at Destination')
 cmd = parser.parse_args()
 
@@ -88,11 +92,11 @@ update_q = queue.Queue()
 # Global Variables
 object_storage_client = None
 object_storage_client_dest = None
-destination_namespace = ""
-source_namespace = ""
 
 source_bucket = cmd.source_bucket
 source_region = cmd.source_region
+source_namespace = cmd.source_namespace
+destination_namespace = cmd.destination_namespace
 source_prefix = cmd.source_prefix_include
 source_prefix_exclude = cmd.source_prefix_exclude
 destination_bucket = cmd.destination_bucket
@@ -446,7 +450,8 @@ def connect_to_object_storage():
             object_storage_client.base_client.session.proxies = {'https': cmd.proxy}
 
         # retrieve namespace from object storage
-        source_namespace = object_storage_client.get_namespace().data
+        if not source_namespace:
+            source_namespace = object_storage_client.get_namespace().data
         print("Succeed.")
 
     except Exception as e:
@@ -463,7 +468,8 @@ def connect_to_object_storage():
             object_storage_client_dest.base_client.session.proxies = {'https': cmd.proxy}
 
         # retrieve namespace from object storage
-        destination_namespace = object_storage_client_dest.get_namespace().data
+        if not destination_namespace:
+            destination_namespace = object_storage_client_dest.get_namespace().data
         print("Succeed.")
 
     except Exception as e:
