@@ -1,5 +1,5 @@
 # coding: utf-8
-# Copyright (c) 2016, 2020, Oracle and/or its affiliates.  All rights reserved.
+# Copyright (c) 2016, 2022, Oracle and/or its affiliates.  All rights reserved.
 # This software is dual-licensed to you under the Universal Permissive License (UPL) 1.0 as shown at https://oss.oracle.com/licenses/upl or Apache License 2.0 as shown at http://www.apache.org/licenses/LICENSE-2.0. You may choose either license.
 
 ##########################################################################
@@ -8,6 +8,8 @@
 # @author: Adi Z
 #
 # Supports Python 3
+#
+# DISCLAIMER – This is not an official Oracle application,  It does not supported by Oracle Support, It should NOT be used for utilization calculation purposes
 ##########################################################################
 # Info:
 #    Bulk rename with parallel threads
@@ -23,8 +25,9 @@
 #   -sb source_bucket
 #   -sp source_prefix_include
 #   -sr source_region
-#   -textremove - text remove prefix (can be used to remove folder)
-#   -textappend - text append prefix (can be used to add folder)
+#   -sn source_namespace
+#   -textrem - text remove prefix (can be used to remove folder)
+#   -textadd - text append prefix (can be used to add folder)
 ##########################################################################
 
 import threading
@@ -46,10 +49,11 @@ parser.add_argument('-t', default="", dest='config_profile', help='Config file s
 parser.add_argument('-p', default="", dest='proxy', help='Set Proxy (i.e. www-proxy-server.com:80) ')
 parser.add_argument('-ip', action='store_true', default=False, dest='is_instance_principals', help='Use Instance Principals for Authentication')
 parser.add_argument('-dt', action='store_true', default=False, dest='is_delegation_token', help='Use Delegation Token for Authentication')
-parser.add_argument('-c', type=argparse.FileType('r'), dest='config_file', help="Config File (default=~/.oci/config)")
+parser.add_argument('-c', default="", dest='config_file', help="Config File (default=~/.oci/config)")
 parser.add_argument('-sb', default="", dest='source_bucket', help='Source Bucket Name')
 parser.add_argument('-sp', default="", dest='source_prefix_include', help='Source Prefix Include')
 parser.add_argument('-sr', default="", dest='source_region', help='Source Region')
+parser.add_argument('-sn', default="", dest='source_namespace', help='Source Namespace (Default current connection)')
 parser.add_argument('-textrem', default="", dest='text_remove', help='text remove prefix (can be used to remove folder)')
 parser.add_argument('-textadd', default="", dest='text_append', help='text append prefix (can be used to add folder)')
 cmd = parser.parse_args()
@@ -84,10 +88,10 @@ config_profile = (cmd.config_profile if cmd.config_profile else oci.config.DEFAU
 
 # Global Variables
 object_storage_client = None
-source_namespace = ""
 source_bucket = cmd.source_bucket
 source_prefix = cmd.source_prefix_include
 source_region = cmd.source_region
+source_namespace = cmd.source_namespace
 
 source_text_remove = cmd.text_remove
 source_text_append = cmd.text_append
@@ -245,7 +249,7 @@ def add_objects_to_queue(ns, source_bucket):
     count = 0
     next_starts_with = None
     while True:
-        response = object_storage_client.list_objects(ns, source_bucket, start=next_starts_with, prefix=source_prefix)
+        response = object_storage_client.list_objects(ns, source_bucket, start=next_starts_with, prefix=source_prefix, retry_strategy=oci.retry.DEFAULT_RETRY_STRATEGY)
         next_starts_with = response.data.next_start_with
 
         for object_ in response.data.objects:
@@ -305,7 +309,8 @@ def connect_to_object_storage():
             object_storage_client.base_client.session.proxies = {'https': cmd.proxy}
 
         # retrieve namespace from object storage
-        source_namespace = object_storage_client.get_namespace().data
+        if not source_namespace:
+            source_namespace = object_storage_client.get_namespace(retry_strategy=oci.retry.DEFAULT_RETRY_STRATEGY).data
         print("Succeed.")
 
     except Exception as e:
@@ -324,23 +329,6 @@ def main():
     # global parameters
     global source_namespace
     global object_storage_client
-
-    # get signer
-    config, signer = create_signer(cmd.config_file, cmd.config_profile, cmd.is_instance_principals, cmd.is_delegation_token)
-
-    try:
-        # connect and fetch namespace
-        print("\nConnecting to Object Storage Service...")
-        object_storage_client = oci.object_storage.ObjectStorageClient(config, signer=signer)
-        if cmd.proxy:
-            object_storage_client.base_client.session.proxies = {'https': cmd.proxy}
-
-        # retrieve namespace from object storage
-        source_namespace = object_storage_client.get_namespace().data
-        print("Succeed.")
-
-    except Exception as e:
-        raise RuntimeError("\nError extracting namespace - " + str(e))
 
     # command info
     print_command_info()

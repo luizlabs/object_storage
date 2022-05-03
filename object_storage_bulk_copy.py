@@ -1,5 +1,5 @@
 # coding: utf-8
-# Copyright (c) 2016, 2020, Oracle and/or its affiliates.  All rights reserved.
+# Copyright (c) 2016, 2022, Oracle and/or its affiliates.  All rights reserved.
 # This software is dual-licensed to you under the Universal Permissive License (UPL) 1.0 as shown at https://oss.oracle.com/licenses/upl or Apache License 2.0 as shown at http://www.apache.org/licenses/LICENSE-2.0. You may choose either license.
 
 ##########################################################################
@@ -8,6 +8,8 @@
 # @author: Tim S and Adi Z
 #
 # Supports Python 3
+#
+# DISCLAIMER – This is not an official Oracle application,  It does not supported by Oracle Support, It should NOT be used for utilization calculation purposes
 ##########################################################################
 # Info:
 #    Bulk copy object storage bucket to other bucket with parallel threads
@@ -51,7 +53,7 @@ parser.add_argument('-t', default="", dest='config_profile', help='Config file s
 parser.add_argument('-p', default="", dest='proxy', help='Set Proxy (i.e. www-proxy-server.com:80) ')
 parser.add_argument('-ip', action='store_true', default=False, dest='is_instance_principals', help='Use Instance Principals for Authentication')
 parser.add_argument('-dt', action='store_true', default=False, dest='is_delegation_token', help='Use Delegation Token for Authentication')
-parser.add_argument('-c', type=argparse.FileType('r'), dest='config_file', help="Config File (default=~/.oci/config)")
+parser.add_argument('-c', default="", dest='config_file', help="Config File (default=~/.oci/config)")
 parser.add_argument('-sb', default="", dest='source_bucket', help='Source Bucket Name')
 parser.add_argument('-sr', default="", dest='source_region', help='Source Region (Default current connection)')
 parser.add_argument('-sn', default="", dest='source_namespace', help='Source Namespace (Default current connection)')
@@ -288,7 +290,7 @@ def load_dest_bucket_to_mem(object_storage_client_dest, destination_namespace, d
 
     next_starts_with = None
     while True:
-        response = object_storage_client_dest.list_objects(destination_namespace, destination_bucket, start=next_starts_with, prefix=source_prefix, fields="md5")
+        response = object_storage_client_dest.list_objects(destination_namespace, destination_bucket, start=next_starts_with, prefix=source_prefix, fields="md5", retry_strategy=oci.retry.DEFAULT_RETRY_STRATEGY)
         next_starts_with = response.data.next_start_with
 
         if loaded_page % 100 == 0 and loaded_page > 0:
@@ -316,7 +318,7 @@ def add_objects_to_queue(ns, bucket):
     skipped = 0
     next_starts_with = None
     while True:
-        response = object_storage_client.list_objects(ns, bucket, start=next_starts_with, prefix=source_prefix)
+        response = object_storage_client.list_objects(ns, bucket, start=next_starts_with, prefix=source_prefix, retry_strategy=oci.retry.DEFAULT_RETRY_STRATEGY)
         next_starts_with = response.data.next_start_with
 
         for object_ in response.data.objects:
@@ -451,7 +453,7 @@ def connect_to_object_storage():
 
         # retrieve namespace from object storage
         if not source_namespace:
-            source_namespace = object_storage_client.get_namespace().data
+            source_namespace = object_storage_client.get_namespace(retry_strategy=oci.retry.DEFAULT_RETRY_STRATEGY).data
         print("Succeed.")
 
     except Exception as e:
@@ -469,7 +471,7 @@ def connect_to_object_storage():
 
         # retrieve namespace from object storage
         if not destination_namespace:
-            destination_namespace = object_storage_client_dest.get_namespace().data
+            destination_namespace = object_storage_client_dest.get_namespace(retry_strategy=oci.retry.DEFAULT_RETRY_STRATEGY).data
         print("Succeed.")
 
     except Exception as e:
