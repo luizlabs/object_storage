@@ -224,7 +224,8 @@ def main():
     # if output to file
     file = None
     if cmd.file:
-        file = open(cmd.file.name + ".txt", "w+")
+        file = open(cmd.file.name + ".csv", "w+")
+        file.write("Object Name,Size,Time Created,Time Modified, Storage Tier\n")
 
     # start processing
     count = 0
@@ -232,7 +233,7 @@ def main():
     next_starts_with = None
 
     while True:
-        response = object_storage_client.list_objects(source_namespace, source_bucket, start=next_starts_with, prefix=source_prefix, fields='size', retry_strategy=oci.retry.DEFAULT_RETRY_STRATEGY)
+        response = object_storage_client.list_objects(source_namespace, source_bucket, start=next_starts_with, prefix=source_prefix, fields='size,timeCreated,timeModified,storageTier', retry_strategy=oci.retry.DEFAULT_RETRY_STRATEGY)
         next_starts_with = response.data.next_start_with
 
         for object_file in response.data.objects:
@@ -246,11 +247,11 @@ def main():
 
             # if write to file:
             if cmd.file:
-                file.write(str(object_file.name) + "," + str(object_file.size) + "\n")
+                file.write(str(object_file.name) + "," + str(object_file.size) + "," + str(object_file.time_created)[0:16] + "," + str(object_file.time_modified)[0:16] + "," + str(object_file.storage_tier) + "\n")
 
             # if print to screen
             if not (cmd.file or cmd.count_only):
-                print(str('{:20,.0f}'.format(object_file.size)).rjust(20) + " - " + str(object_file.name))
+                print(str('{:20,.0f}'.format(object_file.size)).rjust(20) + " | C " + str(object_file.time_created)[0:16] + " | U " + str(object_file.time_modified)[0:16] + " | " + str(object_file.storage_tier).ljust(18)[0:17] + " | " + str(object_file.name))
 
             # feedback if write to file or count every 100k rows
             if (cmd.file or cmd.count_only) and count % 100000 == 0:
