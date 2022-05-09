@@ -61,7 +61,8 @@ Bulk delete bucket objects from a bucket with option to filter
 usage: object_storage_bulk_delete.py [-h] [-t CONFIG_PROFILE] [-p PROXY] [-ip]
                                      [-dt] [-c CONFIG_FILE]
                                      [-sb SOURCE_BUCKET] [-sp SOURCE_PREFIX]
-                                     [-se SOURCE_PREFIX_EXCLUDE]
+                                     [-se SOURCE_PREFIX_EXCLUDE] 
+                                     [-sn SOURCE_NAMESPACE]
                                      [-exclude_dirs] [-sr SOURCE_REGION]
 
 optional arguments:
@@ -86,7 +87,8 @@ usage: object_storage_bulk_restore.py [-h] [-t CONFIG_PROFILE] [-p PROXY]
                                       [-ip] [-dt] [-c CONFIG_FILE]
                                       [-sb SOURCE_BUCKET]
                                       [-sp SOURCE_PREFIX_INCLUDE]
-                                      [-sr SOURCE_REGION]
+                                      [-sr SOURCE_REGION] 
+                                      [-sn SOURCE_NAMESPACE]
 
 optional arguments:
   -h, --help                show this help message and exit
@@ -109,6 +111,7 @@ usage: object_storage_list_objects.py [-h] [-t CONFIG_PROFILE] [-p PROXY]
                                       [-ip] [-dt] [-c CONFIG_FILE]
                                       [-sb SOURCE_BUCKET] [-sp SOURCE_PREFIX]
                                       [-se SOURCE_PREFIX_EXCLUDE]
+                                      [-sn SOURCE_NAMESPACE]
                                       [-sr SOURCE_REGION] [-exclude_dirs]
                                       [-f FILE] [-co]
 
@@ -137,6 +140,7 @@ usage: object_storage_bulk_rename.py [-h] [-t CONFIG_PROFILE] [-p PROXY] [-ip]
                                      [-sb SOURCE_BUCKET]
                                      [-sp SOURCE_PREFIX_INCLUDE]
                                      [-sr SOURCE_REGION]
+                                     [-sn SOURCE_NAMESPACE]
                                      [-textrem TEXT_REMOVE]
                                      [-textadd TEXT_APPEND]
 
