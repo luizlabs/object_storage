@@ -1,5 +1,5 @@
 -----------------------------
-Executing using Cloud Shell:
+Executing code using Cloud Shell:
 -----------------------------
 
 .. code-block::

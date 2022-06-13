@@ -1,6 +1,6 @@
 #!/bin/ksh
 ##########################################
-# Object Storage Upload + Retry
+# Object Storage Upload + Retry :D
 # Date - 04/10/2021
 ##########################################
 
